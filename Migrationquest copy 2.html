@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Box to OneDrive Migration Quest</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slide-up { from { transform: translateY(20px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+        @keyframes slide-up-fast { from { transform: translateY(50px) scale(0.9); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+        .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
+        .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-slide-up-fast { animation: slide-up-fast 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+        
+        @keyframes bounce {
+          0%, 100% { transform: translateY(-5%); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); }
+          50% { transform: translateY(0); animation-timing-function: cubic-bezier(0, 0, 0.2, 1); }
+        }
+       .animate-bounce { animation: bounce 1s infinite; }
+       body { font-family: sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // SVG Icon Components - This removes the external dependency
+        const Icon = ({ className, children }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const CheckCircle = ({ className }) => <Icon className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></Icon>;
+        const Award = ({ className }) => <Icon className={className}><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></Icon>;
+        const Users = ({ className }) => <Icon className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></Icon>;
+        const Zap = ({ className }) => <Icon className={className}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></Icon>;
+        const Sliders = ({ className }) => <Icon className={className}><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></Icon>;
+        const PlayCircle = ({ className }) => <Icon className={className}><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></Icon>;
+        const LinkIcon = ({ className }) => <Icon className={className}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.72"/></Icon>;
+        const FileText = ({ className }) => <Icon className={className}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></Icon>;
+        const FolderSync = ({ className }) => <Icon className={className}><path d="M12 20h-5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3.36a1 1 0 0 1 .8.4L12 8h8v3"/><path d="m21.1 13.9-1.2 1.2"/><path d="m23 18-1.1-1.1"/><path d="M18 23v-5h-5"/><path d="m13.9 21.1 1.2-1.2"/></Icon>;
+        const Search = ({ className }) => <Icon className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></Icon>;
+        const Star = ({ className, size=12 }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
+
+        const icons = { Zap, Users, Sliders };
+
+        // WelcomeScreen Component
+        const WelcomeScreen = ({ onStart }) => (
+            <div className="min-h-screen bg-gradient-to-br from-[#00356b] via-[#0a2742] to-[#001d3a] text-white flex flex-col items-center justify-center p-4 text-center">
+                <div className="max-w-3xl animate-fade-in">
+                    <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
+                        Box to OneDrive Migration Quest
+                    </h1>
+                    <p className="text-lg md:text-xl text-blue-200 mb-12">
+                        Your guided journey from Box to OneDrive, powered by Globus.
+                    </p>
+                    <button
+                        onClick={onStart}
+                        className="bg-blue-500 hover:bg-blue-400 text-white font-bold py-4 px-10 rounded-lg text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-300"
+                    >
+                        Start Your Quest
+                    </button>
+                </div>
+            </div>
+        );
+
+        // PathSelector (Smart Wizard) Component
+        const PathSelector = ({ paths, onSelect }) => {
+            const [answers, setAnswers] = useState({ dataSize: null, shares: null });
+            const [recommendedPathId, setRecommendedPathId] = useState(null);
+
+            const questions = {
+                dataSize: { question: "How much data are you moving?", options: ["< 1 GB", "1–50 GB", "> 50 GB"] },
+                shares: { question: "Do you manage shared folders or Box Notes?", options: ["No", "A few shared folders", "Many shares / Box Notes"] }
+            };
+
+            const handleAnswer = (question, option) => setAnswers(prev => ({ ...prev, [question]: option }));
+
+            const handleFindPath = () => {
+                const { dataSize, shares } = answers;
+                if (dataSize === '> 50 GB' || shares === 'Many shares / Box Notes') setRecommendedPathId('power');
+                else if (dataSize === '1–50 GB' || shares === 'A few shared folders') setRecommendedPathId('advanced');
+                else setRecommendedPathId('essential');
+            };
+
+            const resetWizard = () => {
+                setAnswers({ dataSize: null, shares: null });
+                setRecommendedPathId(null);
+            };
+
+            const bothAnswered = answers.dataSize && answers.shares;
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-[#00356b] to-[#0a2742] text-white flex items-center justify-center p-4">
+                    <div className="w-full max-w-4xl">
+                        {!recommendedPathId ? (
+                            <div className="bg-white/10 backdrop-blur-md p-8 rounded-2xl border border-white/20 animate-fade-in">
+                                <h2 className="text-3xl font-bold text-center mb-8">Find Your Perfect Path</h2>
+                                {Object.entries(questions).map(([key, q]) => (
+                                    <div key={key} className="mb-8">
+                                        <h3 className="text-lg font-semibold text-blue-200 mb-4">{q.question}</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            {q.options.map(option => (
+                                                <button key={option} onClick={() => handleAnswer(key, option)} className={`p-4 rounded-lg text-center transition-all duration-200 border-2 ${answers[key] === option ? 'bg-blue-500 border-blue-400 ring-2 ring-offset-2 ring-offset-blue-900 ring-blue-400' : 'bg-white/10 border-transparent hover:bg-white/20'}`}>
+                                                    {option}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                                <div className="text-center mt-8">
+                                    <button onClick={handleFindPath} disabled={!bothAnswered} className="bg-blue-500 text-white font-bold py-3 px-8 rounded-lg transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed hover:bg-blue-400 disabled:hover:bg-gray-500">
+                                        Find My Path
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center animate-fade-in">
+                                <h2 className="text-3xl md:text-4xl font-bold mb-2">We've Found Your Path</h2>
+                                <p className="text-lg md:text-xl text-blue-200 mb-10">We recommend the <span className="font-bold">{paths[recommendedPathId].name}</span>, but feel free to choose another.</p>
+                                <div className="grid md:grid-cols-3 gap-6">
+                                    {Object.values(paths).map(path => {
+                                        const Icon = icons[path.iconName];
+                                        const isRecommended = path.id === recommendedPathId;
+                                        return (
+                                            <div key={path.id} className={`relative bg-white/10 backdrop-blur-md p-6 rounded-2xl border-2 text-left flex flex-col transition-all duration-300 transform ${isRecommended ? 'border-blue-400 scale-105 shadow-2xl' : 'border-white/20 hover:border-white/40'}`}>
+                                                {isRecommended && (
+                                                    <div className="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                                                        <Star size={12} />
+                                                        RECOMMENDED
+                                                    </div>
+                                                )}
+                                                <div className="flex-grow">
+                                                    <Icon className="w-12 h-12 mb-4 text-blue-300" />
+                                                    <h3 className="text-2xl font-semibold mb-2">{path.name}</h3>
+                                                    <p className="text-blue-200 mb-4 text-sm">{path.description}</p>
+                                                </div>
+                                                <button onClick={() => onSelect(path.id)} className="w-full mt-auto bg-blue-500/80 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg transition-colors">
+                                                    Start Quest
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <button onClick={resetWizard} className="mt-10 text-blue-200 hover:text-white transition">
+                                    Re-take Quiz
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // Main App Component
+        const App = () => {
+            const [questStarted, setQuestStarted] = useState(false);
+            const [selectedPath, setSelectedPath] = useState(null);
+            const [progress, setProgress] = useState({});
+            const [activeStep, setActiveStep] = useState(null);
+            const [showBadge, setShowBadge] = useState(false);
+
+            const paths = useMemo(() => ({
+                essential: { 
+                    id: 'essential', name: 'Essential Path', description: 'Fastest path for personal files and basic migration needs.', iconName: 'Zap', badge: 'Migration Sprinter', steps: [
+                        { id: 'login', title: 'Log in to Globus', content: 'Globus is Yale\'s chosen tool for fast, secure, and reliable data transfer. To begin, go to the Globus website and log in using the "Yale University" option. You will be prompted to authenticate with your standard Yale NetID and password. This initial login gives you access to the Globus file transfer interface.', link: 'https://it.yale.edu/globus-guide#login', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Globus+Login+Screen' },
+                        { id: 'connect-box', title: 'Connect Your Box Account', content: 'Next, tell Globus where to find your source files. In the Globus File Manager, search for the "Yale University Box" collection and select it. You will be asked to authenticate with your Box account. This step grants Globus secure, temporary access to read your files for the transfer. It’s like giving Globus a key to your old filing cabinet.', link: 'https://it.yale.edu/globus-guide#connect-box', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Select+Box+Collection' },
+                        { id: 'connect-onedrive', title: 'Connect Your OneDrive Account', content: 'Now, specify the destination for your files. In the second panel of the Globus File Manager, search for the "Yale University OneDrive" collection and select it. Similar to the Box connection, you will need to authenticate with your Yale Microsoft account. This authorizes Globus to write the transferred files into your new OneDrive space.', link: 'https://it.yale.edu/globus-guide#connect-onedrive', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Select+OneDrive+Collection' },
+                        { id: 'start-transfer', title: 'Start Your Basic Transfer', content: 'With Box on the left and OneDrive on the right, you can now start the migration. Select the folders and files you wish to move. Choose a destination folder in your OneDrive panel. For this basic transfer, ignore the extra options. Click the "Start" button to begin the process. Globus works in the background and will email you on completion.', link: 'https://it.yale.edu/globus-guide#start-transfer', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Globus+Transfer+View' },
+                        { id: 'verify-files', title: 'Quickly Verify Your Files', content: 'Once Globus confirms the transfer is complete, it’s wise to double-check. Log in to your OneDrive account and navigate to the destination folder. Perform a spot-check by opening a few key files to ensure they transferred correctly and are accessible. This provides peace of mind that your most important data has arrived safely.', link: 'https://it.yale.edu/globus-guide#verify', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Files+in+OneDrive' },
+                    ]
+                },
+                advanced: { 
+                    id: 'advanced', name: 'Advanced Path', description: 'For those who collaborate and need to manage shared files.', iconName: 'Users', badge: 'Collaboration Champion', steps: [
+                        { id: 'login', title: 'Log in to Globus', content: 'To begin, log into Globus using the "Yale University" organizational login. This will redirect you to the standard Yale CAS login screen for you to enter your NetID and password. Globus is the university-approved platform for this migration, ensuring your data is handled securely and efficiently. It provides a robust interface for managing transfers.', link: 'https://it.yale.edu/globus-guide#login', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Globus+Login+Screen' },
+                        { id: 'connect-endpoints', title: 'Connect Box & OneDrive', content: 'In the Globus File Manager, connect to two "collections": source and destination. First, search for "Yale University Box" and authenticate. This allows Globus to see your files. Next, in the other panel, search for "Yale University OneDrive" and authenticate. This gives Globus permission to place your files in their new home.', link: 'https://it.yale.edu/globus-guide#connect-endpoints', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Two+Panels+Connected' },
+                        { id: 'transfer-options', title: 'Set Key Transfer Options', content: 'Before starting, click "Transfer & Timer Options." We recommend enabling "verify integrity with checksums" to guarantee files are not corrupted. Also, enable "sync - only transfer new or changed files." This is useful if you need to run the transfer more than once, as it will intelligently skip files that have already been copied.', link: 'https://it.yale.edu/globus-guide#transfer-options', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Transfer+Options+Menu' },
+                        { id: 'start-transfer', title: 'Initiate the Transfer', content: 'Select the parent folders to move from the Box panel. Choose or create a destination folder within your OneDrive panel. With your options configured, click "Start" to begin. Globus handles the process in the background, so you can close the window. You will receive an email from Globus as soon as the job is successfully completed.', link: 'https://it.yale.edu/globus-guide#start-transfer', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Transfer+Confirmation' },
+                        { id: 'reshare-files', title: 'Re-Share Files in OneDrive', content: 'This is a critical step. File permissions from Box DO NOT transfer to OneDrive. After migration, you must manually re-share them with collaborators from within the OneDrive interface. Identify your shared folders, click the "Share" button, and enter the names or email addresses of your colleagues to grant them access.', link: 'https://it.yale.edu/globus-guide#reshare', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=OneDrive+Sharing+Dialog' },
+                        { id: 'convert-notes', title: 'Convert Your Box Notes', content: 'Box Notes use a proprietary format and will not migrate correctly. Before losing access to Box, you must manually convert them. Open each Box Note, go to the "File" menu, and select "Print". Then, choose "Save as PDF". Alternatively, copy and paste the content into a new Word document. Save these converted files in your newly migrated OneDrive folders.', link: 'https://it.yale.edu/globus-guide#convert-notes', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Box+Note+to+PDF' },
+                        { id: 'verify-results', title: 'Verify Transfer and Shares', content: 'Your job isn\'t over when the transfer completes. Check that your file structures in OneDrive match Box. Open several files to ensure they are intact. Critically, contact a trusted collaborator and ask them to confirm they can access a folder you re-shared with them. This confirms both the data and its access have been successfully migrated.', link: 'https://it.yale.edu/globus-guide#verify-shares', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Collaboration+Check' },
+                    ]
+                },
+                power: { 
+                    id: 'power', name: 'Power User Path', description: 'For researchers, lab managers, and those with large, complex data.', iconName: 'Sliders', badge: 'Data Master', steps: [
+                        { id: 'login-endpoints', title: 'Login and Connect Endpoints', content: 'Begin by authenticating to Globus via the "Yale University" portal with your NetID. In the two-panel File Manager, connect to the "Yale University Box" and "Yale University OneDrive" collections. For large or complex transfers, ensuring these connections are active and authenticated before proceeding is a crucial first step.', link: 'https://it.yale.edu/globus-guide#login-endpoints', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Globus+File+Manager' },
+                        { id: 'advanced-options', title: 'Configure Advanced Options', content: 'For research data, metadata is key. Under "Transfer & Timer Options," enable "preserve source file modification times" and "verify integrity with checksums." Consider using the "sync" option to "delete files on destination that do not exist on source" for perfect mirroring, but use with extreme caution as this is a destructive option.', link: 'https://it.yale.edu/globus-guide#advanced-options', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Advanced+Transfer+Options' },
+                        { id: 'run-transfer', title: 'Run and Monitor Transfer', content: 'Select source and destination folders. Before clicking "Start," add a descriptive label to the transfer job for your records. For very large transfers (>1TB), monitor progress periodically via the "Activity" tab in the Globus web app. This allows you to spot potential permission errors or other issues early in the process.', link: 'https://it.yale.edu/globus-guide#run-monitor', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Globus+Activity+Page' },
+                        { id: 'schedule-sync', title: 'Optional: Schedule Recurring Sync', content: 'If migrating an active project, Globus can run a scheduled, recurring sync. In the "Transfer & Timer Options," you can set up a timer to automatically re-run the transfer on a daily or weekly basis. This ensures any new or modified files in Box are automatically copied to OneDrive until you fully decommission the Box source.', link: 'https://it.yale.edu/globus-guide#schedule-sync', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Timer+Settings' },
+                        { id: 'reshare-files', title: 'Re-architect and Re-share Files', content: 'Existing sharing permissions will not carry over. This is an opportunity to rethink your sharing strategy. Create sharing links and permissions natively within OneDrive and SharePoint. For lab data, consider using Microsoft Teams or SharePoint sites as a more robust collaboration hub rather than sharing from a personal OneDrive account.', link: 'https://it.yale.edu/globus-guide#reshare-power', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=SharePoint+Site' },
+                        { id: 'convert-notes', title: 'Script Box Note Conversion', content: 'For users with many Box Notes, manual conversion is tedious. Use the Box API for advanced users to list all Box Notes, then systematically open and convert them to PDF or DOCX format. This must be done prior to losing Box access. Store the converted files alongside your migrated data in OneDrive for long-term preservation.', link: 'https://it.yale.edu/globus-guide#convert-notes-api', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=API+Script+Example' },
+                        { id: 'full-verification', title: 'Perform Full Log Verification', content: 'For data with high-integrity requirements, a spot-check is insufficient. After the transfer, go to the "Activity" tab in Globus. View the detailed event log for your completed transfer. This log provides a file-by-file manifest of every item transferred, skipped, or failed, providing a forensically-sound record of the migration.', link: 'https://it.yale.edu/globus-guide#full-verify', media: 'https://placehold.co/600x400/EBF8FF/00356B?text=Globus+Event+Log' },
+                    ]
+                },
+            }), []);
+
+            useEffect(() => {
+                if (selectedPath) {
+                    const currentPathProgress = progress[selectedPath] || [];
+                    const pathSteps = paths[selectedPath].steps;
+                    if (currentPathProgress.length === pathSteps.length && pathSteps.length > 0) {
+                        setShowBadge(true);
+                    } else {
+                        setShowBadge(false);
+                    }
+                }
+            }, [progress, selectedPath, paths]);
+
+            const handleSelectPath = (pathId) => {
+                setSelectedPath(pathId);
+                setActiveStep(null);
+                setShowBadge(false);
+            };
+            
+            const handleStepClick = (step) => {
+                const currentPathProgress = progress[selectedPath] || [];
+                const isCompleted = currentPathProgress.includes(step.id);
+                const currentStepIndex = paths[selectedPath].steps.findIndex(s => s.id === step.id);
+                const isCurrent = !isCompleted && (currentStepIndex === 0 || currentPathProgress.includes(paths[selectedPath].steps[currentStepIndex - 1].id));
+                
+                if (isCurrent || isCompleted) {
+                    setActiveStep(step);
+                }
+            };
+
+            const handleCompleteStep = (stepId) => {
+                const currentPathProgress = progress[selectedPath] || [];
+                if (!currentPathProgress.includes(stepId)) {
+                    setProgress(prev => ({
+                        ...prev,
+                        [selectedPath]: [...currentPathProgress, stepId]
+                    }));
+                }
+                setActiveStep(null);
+            };
+            
+            const handleResetProgress = () => {
+                setProgress(prev => ({ ...prev, [selectedPath]: [] }));
+                setShowBadge(false);
+                setActiveStep(null);
+            };
+
+            const resetPathSelection = () => {
+                setQuestStarted(false);
+                setSelectedPath(null);
+                setActiveStep(null);
+                setShowBadge(false);
+            };
+            
+            if (!questStarted) {
+                return <WelcomeScreen onStart={() => setQuestStarted(true)} />;
+            }
+
+            if (!selectedPath) {
+                return <PathSelector paths={paths} onSelect={handleSelectPath} />;
+            }
+
+            return (
+                <div className="bg-gray-50 min-h-screen text-gray-800">
+                    <div className="container mx-auto p-4 md:p-8">
+                        <button onClick={resetPathSelection} className="mb-6 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors">
+                            &larr; Start Over
+                        </button>
+                        <QuestMap
+                            path={paths[selectedPath]}
+                            progress={progress[selectedPath] || []}
+                            onStepClick={handleStepClick}
+                            onReset={handleResetProgress}
+                        />
+                        {activeStep && (
+                            <StepDetail
+                                step={activeStep}
+                                onComplete={handleCompleteStep}
+                                onClose={() => setActiveStep(null)}
+                            />
+                        )}
+                        {showBadge && (
+                            <BadgeNotification
+                                badge={paths[selectedPath].badge}
+                                onClose={() => setShowBadge(false)}
+                            />
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const QuestMap = ({ path, progress, onStepClick, onReset }) => {
+            const totalSteps = path.steps.length;
+            const completedSteps = progress.length;
+            const progressPercentage = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+
+            const getIcon = (stepId) => {
+                switch (stepId) {
+                    case 'login': case 'login-endpoints': return PlayCircle;
+                    case 'connect-box': case 'connect-onedrive': case 'connect-endpoints': return LinkIcon;
+                    case 'transfer-options': case 'advanced-options': case 'run-transfer': return Sliders;
+                    case 'start-transfer': return Zap;
+                    case 'reshare-files': return Users;
+                    case 'convert-notes': return FileText;
+                    case 'verify-files': case 'verify-results': case 'full-verification': return Search;
+                    case 'schedule-sync': return FolderSync;
+                    default: return FolderSync;
+                }
+            };
+
+            return (
+                <div className="bg-white p-6 md:p-8 rounded-2xl shadow-lg">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                        <div>
+                            <h2 className="text-3xl font-bold text-gray-900">{path.name}</h2>
+                            <p className="text-gray-600">Follow these steps to complete your migration.</p>
+                        </div>
+                        <button onClick={onReset} className="mt-4 md:mt-0 text-sm text-gray-500 hover:text-gray-800 transition">Reset Progress</button>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 mb-8">
+                        <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${progressPercentage}%`, transition: 'width 0.5s ease-in-out' }}></div>
+                    </div>
+                    <div className="relative">
+                        <div className="absolute left-5 top-5 bottom-5 w-0.5 bg-gray-200 hidden md:block"></div>
+                        {path.steps.map((step, index) => {
+                            const isCompleted = progress.includes(step.id);
+                            const isCurrent = !isCompleted && (index === 0 || progress.includes(path.steps[index - 1].id));
+                            const IconComponent = getIcon(step.id);
+                            return (
+                                <div key={step.id} className={`flex items-start mb-6 md:mb-2 ${isCurrent || isCompleted ? 'cursor-pointer' : 'cursor-default'}`} onClick={() => onStepClick(step)}>
+                                    <div className={`z-10 flex items-center justify-center w-10 h-10 rounded-full shrink-0 ${isCompleted ? 'bg-green-500' : 'bg-gray-300'} ${isCurrent ? 'ring-4 ring-blue-300 bg-blue-500' : ''} transition-all duration-300`}>
+                                        {isCompleted ? <CheckCircle className="w-6 h-6 text-white" /> : <IconComponent className={`w-6 h-6 ${isCurrent ? 'text-white' : 'text-gray-600'}`} />}
+                                    </div>
+                                    <div className={`md:ml-6 ml-4 border rounded-lg p-4 w-full transition-all duration-300 ${isCurrent || isCompleted ? 'bg-gray-50 border-gray-200 hover:border-blue-500 hover:bg-blue-50' : 'bg-gray-100 border-gray-200 opacity-60'}`}>
+                                        <h3 className="font-semibold text-lg">{step.title}</h3>
+                                        {isCurrent && <p className="text-sm text-blue-600 animate-pulse">Your current step</p>}
+                                        {isCompleted && <p className="text-sm text-green-600">Completed!</p>}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        const StepDetail = ({ step, onComplete, onClose }) => {
+            return (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl relative transform transition-all animate-slide-up p-8 text-center" onClick={e => e.stopPropagation()}>
+                        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                        <h2 className="text-2xl md:text-3xl font-bold mb-6 text-gray-900">{step.title}</h2>
+                        {step.media && (
+                            <div className="bg-gray-100 rounded-lg mb-6 w-full aspect-video flex items-center justify-center overflow-hidden">
+                                <img src={step.media} alt={step.title} className="w-full h-full object-contain" />
+                            </div>
+                        )}
+                        <p className="text-gray-600 mb-6 leading-relaxed text-left md:text-center">{step.content}</p>
+                        <div className="flex flex-col gap-4">
+                            {step.link && (
+                                <a href={step.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                                    <LinkIcon className="w-5 h-5" />
+                                    Yale's Globus Guide
+                                </a>
+                            )}
+                            <button onClick={() => onComplete(step.id)} className="w-full bg-[#00356b] hover:bg-blue-800 text-white font-bold py-3 px-6 rounded-lg text-lg transition-colors transform hover:scale-105">
+                                I've Done This
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const BadgeNotification = ({ badge, onClose }) => {
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 animate-fade-in">
+                    <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center relative transform transition-all animate-slide-up-fast">
+                        <button onClick={onClose} className="absolute top-4 right-4 text-white/70 hover:text-white">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                        <Award className="w-24 h-24 mx-auto mb-4 text-yellow-300 animate-bounce" />
+                        <h2 className="text-3xl font-bold mb-2">Quest Complete!</h2>
+                        <p className="text-lg text-blue-200 mb-4">You've earned the</p>
+                        <p className="bg-yellow-300 text-blue-900 font-bold text-2xl py-2 px-6 rounded-lg inline-block">{badge}</p>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
